@@ -1,3 +1,9 @@
+# Мое описание
+
+Все описано в (docs/rules)[./docs/rules/lodash-to-native.md]
+
+# Классическое от yo-generator
+
 # eslint-plugin-lodash-to-native
 
 Try to fix lodash#map to Array#map if possible
@@ -24,28 +30,16 @@ Add `lodash-to-native` to the plugins section of your `.eslintrc` configuration 
 
 ```json
 {
-    "plugins": [
-        "lodash-to-native"
-    ]
+  "plugins": ["lodash-to-native"]
 }
 ```
-
 
 Then configure the rules you want to use under the rules section.
 
 ```json
 {
-    "rules": {
-        "lodash-to-native/rule-name": 2
-    }
+  "rules": {
+    "lodash-to-native/map": 2
+  }
 }
 ```
-
-## Supported Rules
-
-* Fill in provided rules here
-
-
-
-
-

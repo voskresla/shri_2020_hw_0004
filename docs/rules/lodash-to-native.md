@@ -16,6 +16,10 @@ Array#map
 - Не добавил возможность выбора в какую конструкцию фиксить (IfStatemnet /
   ConditionalExpression)
 - Не работает с chaining'ом lodash
+- Не могу понять как заставить eslint уметь в BlockScoped Vars. Сейчас последний
+  тест падает.
+  На конструкции `let a = []; { a = 0; _.map(a, fn) }; _.map(a,fn2)` - в моей голове и
+  astexplorer.net фикситься последний `_.map(a,fn2)` -> в `a.(fn2).
 
 ## Rule Details
 
