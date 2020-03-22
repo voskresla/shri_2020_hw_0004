@@ -1,6 +1,6 @@
 # Мое описание
 
-Все описано в (docs/rules)[./docs/rules/lodash-to-native.md]
+Все описано в [docs/rules](./docs/rules/lodash-to-native.md)
 
 # Классическое от yo-generator
 
