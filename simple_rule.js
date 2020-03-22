@@ -17,10 +17,6 @@ module.exports = {
   },
 
   create(context) {
-    // variables should be defined here
-    // const scopeManager = context.getScope();
-    // console.log(scopeManager);
-    // console.log(context.getSourceCode());
     // const scopeManager = eslintScope.analyze(context.getSourceCode().ast);
     const scopeManager = context.getSourceCode().scopeManager;
     //----------------------------------------------------------------------
@@ -44,34 +40,19 @@ module.exports = {
     };
     const getCaller = node => node.callee.object;
     const getMethodName = node => node.callee.property.name;
-    const isArrayExpression = node => (node.type === 'ArrayExpression' ? true : false);
-    const isObjectExpression = node => (node.type === 'ObjectExpression' ? true : false);
-    const isInReturn = node => (node.parent.type === 'ReturnStatement' ? true : false);
-    // TODO: сделать функцию которая ищем в скоупах и если не находить то false
-    const variableIsArray = node => false;
-    // Проверяем что проверка на массив праивльная:
-    // - нужного аргумента
-    // - через Array.isArray()
-    // - TODO: придумать все возможные проверки на массив и проверять их тоже.
-    //   Например typeof. И проверять через подобие enum.
-    const isIsArrayCheck = (node, test, context) => {
-      if (getCaller(test).name !== 'Array') return false;
-      if (getMethodName(test) !== 'isArray') return false;
-      if (test.arguments.length !== 1) return false;
-      if (test.arguments[0].name !== node.arguments[0].name) return false;
 
-      return true;
+    const isInReturn = node => (node.parent.type === 'ReturnStatement' ? true : false);
+
+    const isIsArrayCheck = (node, test, context) => {
+      return (
+        getCaller(test).name === 'Array' &&
+        getMethodName(test) == 'isArray' &&
+        test.arguments.length == 1 &&
+        test.arguments[0].name === node.arguments[0].name
+      );
     };
-    // Проверяем, что:
-    // _.map лежит в IfStatment
-    // _.map лежит в Alternate
-    // - IfStatement:Test проверяет первый аргумент из map() на массив с
-    //   помощью Array.isArray(arg1), без инверсии
+
     const inCorrectIfStatementAlternate = mapNode => {
-      // поднимаемся по родителям пока parent не станет равным ifStatement у
-      // которого в alternate текущая нода ?
-      // NOTE: проверка через context.ancestros не нравится, потому что анцесторов
-      // может быть очень много. Снизу подниматься выглядит дешевле.
       let isMapInIf = false;
       let tmpNode = mapNode;
       let ifStatementTest = null;
@@ -90,15 +71,10 @@ module.exports = {
       }
 
       if ((isMapInIf && !isIsArrayCheck(mapNode, ifStatementTest.test)) || !isMapInIf) return false;
-
+      console.log('inif');
       return true;
     };
-    // Проверяем, что:
-    // _.map лежит в ConditionalExpression
-    // _.map лежит в Alternate
-    // - ConditionalExpression:Test проверяет первый аргумент из map() на массив с
-    //   помощью Array.isArray(arg1), без инверсии
-    // - ConditionalExpression:Test вызывает нативный метод Array#map на arg1
+
     const inCorrectConditionalExpressionAlternate = mapNode => {
       if (mapNode.parent.type !== 'ConditionalExpression') return false;
       if (mapNode.parent.alternate !== mapNode) return false;
@@ -106,143 +82,32 @@ module.exports = {
 
       return true;
     };
-    // TODO: работает только с VariableDeclaration, переделать на
-    // VariableDeclaration + AssignmentExpression
-    const isResolvedToObjectDeclaration = (node, scopeManager) => {
-      let scope = getScope(scopeManager, node);
-      let result = false;
-      let exit = false;
-
-      while (scope && !exit) {
-        scope.references.forEach(ref => {
-          // Если переменная резолвиться как объект в первом ближайшем scope - не фиксим
-          if (ref.resolved && ref.resolved.name === node.arguments[0].name && ref.writeExpr) {
-            result = ref.writeExpr.type === 'ObjectExpression';
-            exit = true;
-            return;
-          }
-
-          // if (ref.resolved && ref.resolved.name === node.arguments[0].name && ref.writeExpr) {
-          //   result = !ref.writeExpr.type === 'ObjectExpression';
-          //   exit = true;
-          //   return;
-          // }
-
-          if (
-            ref.identifier &&
-            ref.identifier.name === node.arguments[0].name &&
-            ref.identifier.parent &&
-            ref.identifier.parent.type === 'AssignmentExpression'
-          ) {
-            result = ref.writeExpr && ref.writeExpr.type === 'ObjectExpression';
-            exit = true;
-            return;
-          }
-
-          // if (
-          //   ref.identifier &&
-          //   ref.identifier.name === node.arguments[0].name &&
-          //   ref.identifier.parent &&
-          //   ref.identifier.parent.type === 'AssignmentExpression'
-          // ) {
-          //   result = !ref.writeExpr && ref.writeExpr.type === 'ObjectExpression';
-          //   exit = true;
-          //   return;
-          // }
-        });
-
-        scope = scope.upper;
-      }
-
-      return result;
-    };
-    // TODO: работает только с VariableDeclaration, переделать на
-    // VariableDeclaration + AssignmentExpression
-    const isResolvedToArrayDeclaration = (node, scopeManager) => {
-      const arg1Node = node.arguments[0];
-
-      if (node.arguments[0].type === 'ArrayExpression') return false;
-
-      const isDeclaredAsArray = getScope(scopeManager, node).references.some(
-        ref =>
-          ref.resolved &&
-          ref.resolved.name === arg1Node.name &&
-          ref.writeExpr &&
-          ref.writeExpr.type === 'ArrayExpression',
-      );
-      return isDeclaredAsArray ? true : false;
-    };
 
     const isLodashRedeclaratedOrReassignment = (node, scopeManager) => {
-      // const lodash = getCaller(node);
-      // console.log(lodash);
-      console.log(getScope(scopeManager, node));
-      //   console.log('scopeManager in isLodash', scopeManager);
-      //   console.log(getScope(scopeManager, node));
-      console.log(
-        'lodash was reAssignment in scope of this CallExpression',
-        getScope(scopeManager, node).references.some(
-          ref =>
-            ref.identifier &&
-            ref.identifier.parent &&
-            ref.identifier.parent.type &&
-            ref.identifier.parent.type === 'AssignmentExpression' &&
-            ref.identifier.name &&
-            ref.identifier.name === '_',
-        ),
-      );
-      console.log(
-        'lodash was reDeclared in scope of this CallExpression',
-        getScope(scopeManager, node).references.some(
-          ref => ref.resolved && ref.resolved.name === '_' && ref.resolved.scope.type !== 'global',
-        ),
-      );
-
-      return false;
-    };
-
-    const isMapArgResolvedToFixable = (node, scopeManager) => {
       let scope = getScope(scopeManager, node);
       let result = false;
       let exit = false;
+      const reDeclarated = ref =>
+        ref.resolved && ref.resolved.name === '_' && ref.resolved.scope.type !== 'global';
+      const reAssignment = ref =>
+        ref.identifier &&
+        ref.identifier.parent &&
+        ref.identifier.parent.type &&
+        ref.identifier.parent.type === 'AssignmentExpression' &&
+        ref.identifier.name &&
+        ref.identifier.name === '_';
+
+      console.log('inLodash');
 
       while (scope && !exit) {
-        scope.references.forEach(ref => {
-          // Если переменная резолвиться как массив в первом ближайшем scope - не фиксим
-          if (ref.resolved && ref.resolved.name === node.arguments[0].name && ref.writeExpr) {
-            result = ref.writeExpr.type === 'ArrayExpression';
-            exit = true;
-            return;
-          }
-
-          // if (ref.resolved && ref.resolved.name === node.arguments[0].name && ref.writeExpr) {
-          //   result = !ref.writeExpr.type === 'ObjectExpression';
-          //   exit = true;
-          //   return;
-          // }
-
-          if (
-            ref.identifier &&
-            ref.identifier.name === node.arguments[0].name &&
-            ref.identifier.parent &&
-            ref.identifier.parent.type === 'AssignmentExpression'
-          ) {
-            result = ref.writeExpr && ref.writeExpr.type === 'ArrayExpression';
-            exit = true;
-            return;
-          }
-
-          // if (
-          //   ref.identifier &&
-          //   ref.identifier.name === node.arguments[0].name &&
-          //   ref.identifier.parent &&
-          //   ref.identifier.parent.type === 'AssignmentExpression'
-          // ) {
-          //   result = !ref.writeExpr && ref.writeExpr.type === 'ObjectExpression';
-          //   exit = true;
-          //   return;
-          // }
-        });
+        if (scope.references.some(reAssignment)) {
+          result = true;
+          exit = true;
+        }
+        if (scope.references.some(reDeclarated)) {
+          result = true;
+          exit = true;
+        }
 
         scope = scope.upper;
       }
@@ -251,46 +116,95 @@ module.exports = {
     };
 
     const isAppropriateMapMethod = (node, scopeManager) => {
-      if (getCaller(node).name !== '_') return false;
-      if (getMethodName(node) !== 'map') return false;
-      if (node.arguments.length !== 2) return false;
+      return (
+        getCaller(node).name === '_' && getMethodName(node) === 'map' && node.arguments.length === 2
+      );
+    };
 
-      // if (isMapArgResolvedToFixable(node, scopeManager)) return false;
-      // Нужно ли вобще фиксить
+    const whatIsArg = (node, scopeManager) => {
+      let scope = getScope(scopeManager, node);
+      let result = false;
+      let exit = false;
 
-      // TODO: Не нужно, если _ была переопределена в ближайшем scope
-      // NOTE: считаем что _ точно определена в global как lodash и любое
-      // переопределение в scope где лежить _.map принимаем за причину не фиксить
-      if (isLodashRedeclaratedOrReassignment(node, scopeManager)) return false;
+      if (node.arguments[0].type !== 'Identifier') {
+        result = node.arguments[0].type;
+      } else {
+        while (scope && !exit) {
+          scope.references.forEach(ref => {
+            if (ref.resolved && ref.resolved.name === node.arguments[0].name && ref.writeExpr) {
+              result = ref.writeExpr.type;
+              exit = true;
+              return;
+            }
+            if (
+              ref.identifier &&
+              ref.identifier.name === node.arguments[0].name &&
+              ref.identifier.parent &&
+              ref.identifier.parent.type === 'AssignmentExpression' &&
+              ref.writeExpr
+            ) {
+              result = ref.writeExpr.type;
+              exit = true;
+              return;
+            }
+          });
 
-      // Не нужно, если это не ObjectExpression
-      if (isObjectExpression(node.arguments[0])) return false;
+          scope = scope.upper;
+        }
+      }
 
-      // TODO: Не нужно, если CallExpression является элементом массива
-      // потому что конструкция [if () {} else {}] не может быть элементом массива
-      // но можно фиксить если в options выбрано ternary:true
+      return result ? result : 'unknown';
+    };
 
-      // TODO: Не нужно, если CallExpression является элементом объекта
-      // аналогично элементу массива
+    const dontFix = node => {
+      const mapCallExpString = context.getSourceCode().getText(node);
 
-      // TODO: Не нужно, если можно разрезолвить переменную и понять что это объект
-      // NOTE: стоит перенести в isObjectExpression
-      if (isResolvedToObjectDeclaration(node, scopeManager)) return false;
-      // if (isResolvedToArrayDeclaration(node, scopeManager)) return false;
+      return {
+        node,
+        message: 'Не будем фиксить, потому что аргумент или Literal, или ObjectExpression:',
+        fix(fixier) {
+          return fixier.replaceText(node, mapCallExpString);
+        },
+      };
+    };
 
-      // Не нужно, если _.map в IfStatement:alternate и в IfStatement:Test
-      // проверка первого аргумента на массив
-      // NOTE: пока проверка без возможной инверсии alternate / consequent
-      // NOTE: вангую что есть проблема с вложенностью внутри alternate
-      if (inCorrectIfStatementAlternate(node)) return false;
+    const fixWithOutCheck = node => {
+      const mapCallExpArg1 = context.getSourceCode().getText(node.arguments[0]);
+      const mapCallExpArg2 = context.getSourceCode().getText(node.arguments[1]);
+      const fixString = `${mapCallExpArg1}.map(${mapCallExpArg2})`;
 
-      // Есди _.map в ConditionalStatement:alternate и в ConditionalStatement:Test
-      // проверка первого аргумента на массив
-      // NOTE: пока проверка без возможной инверсии alternate / consequent
-      // NOTE: вангую что есть проблема с вложенностью внутри alternate
-      if (inCorrectConditionalExpressionAlternate(node)) return false;
+      return {
+        node,
+        message: 'Будем фиксить без проверки, потому что аргумент Array:',
+        fix(fixier) {
+          return fixier.replaceText(node, fixString);
+        },
+      };
+    };
+    const fixWithCheck = node => {
+      const mapCallExpString = context.getSourceCode().getText(node);
+      const mapCallExpArg1 = context.getSourceCode().getText(node.arguments[0]);
+      const mapCallExpArg2 = context.getSourceCode().getText(node.arguments[1]);
 
-      return true;
+      const returnStr = isInReturn(node) ? 'return' : '';
+      const arrayCheckStr = `if (Array.isArray(${mapCallExpArg1}))`;
+
+      const startRange = isInReturn(node) ? node.parent.start : node.start;
+      const endRange = isInReturn(node) ? node.parent.end : node.end;
+
+      const fixString = `${arrayCheckStr} {
+        ${returnStr} ${mapCallExpArg1}.map(${mapCallExpArg2})
+      } else {
+        ${returnStr} ${mapCallExpString}
+      }`;
+
+      return {
+        node,
+        message: 'Будем фиксить c проверкой, потому что неизвестно что в аргументе:',
+        fix(fixier) {
+          return fixier.replaceTextRange([startRange, endRange], fixString);
+        },
+      };
     };
 
     //----------------------------------------------------------------------
@@ -300,45 +214,31 @@ module.exports = {
     return {
       CallExpression(node) {
         if (isAppropriateMapMethod(node, scopeManager)) {
-          const mapCallExpString = context.getSourceCode().getText(node);
-          const mapCallExpArg1 = node.arguments[0];
-          const mapCallExpArg2 = node.arguments[1];
+          let report;
 
-          let finalFixString = '';
-          let returnWord = '';
-          let arrayCheckString = '';
+          if (
+            isLodashRedeclaratedOrReassignment(node, scopeManager) ||
+            inCorrectIfStatementAlternate(node) ||
+            inCorrectConditionalExpressionAlternate(node)
+          )
+            return (report = dontFix(node));
 
-          // Нужен ли return
-          if (isInReturn(node)) returnWord = 'return';
+          switch (whatIsArg(node, scopeManager)) {
+            case 'unknown':
+              report = fixWithCheck(node);
+              break;
+            case 'Identifier':
+              report = fixWithCheck(node);
+              break;
+            case 'ArrayExpression':
+              report = fixWithOutCheck(node);
+              break;
+            default:
+              report = dontFix(node);
+              break;
+          }
 
-          finalFixString = `
-                ${
-                  !isMapArgResolvedToFixable(node, scopeManager)
-                    ? `if (Array.isArray(${mapCallExpArg1.name})) {`
-                    : ''
-                }
-                ${returnWord} ${
-            !isMapArgResolvedToFixable(node, scopeManager)
-              ? mapCallExpArg1.name
-              : context.getSourceCode().getText(mapCallExpArg1)
-          }.map(${context.getSourceCode().getText(mapCallExpArg2)})
-                ${
-                  !isMapArgResolvedToFixable(node, scopeManager)
-                    ? `} else {
-                  ${returnWord} ${mapCallExpString}
-                }`
-                    : ''
-                }
-                
-              `;
-
-          context.report({
-            node,
-            message: 'Use native map instead lodash#map',
-            fix(fixier) {
-              return fixier.replaceText(node, finalFixString);
-            },
-          });
+          context.report(report);
         }
       },
     };
